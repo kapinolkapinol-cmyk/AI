@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="description" content="Twój osobisty asystent AI">
+  <title>Mój Asystent AI</title>
+  <style>
+    :root { color-scheme:dark; font-family:"Segoe UI",system-ui,sans-serif; background:#0b1020; color:#e8edff; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100dvh; background:radial-gradient(ellipse at 50% -25%,#29214c 0,#0b1020 60%); }
+    button,input,textarea { font:inherit; }
+    .layout { width:min(980px,100%); height:100dvh; margin:auto; padding:max(12px,env(safe-area-inset-top)) 16px max(12px,env(safe-area-inset-bottom)); display:flex; flex-direction:column; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 2px 15px; }
+    h1 { margin:0; color:#f0eaff; font-size:clamp(20px,5vw,27px); }
+    .sub { color:#9ba9ce; font-size:13px; margin-top:3px; }
+    .header-actions { display:flex; gap:8px; align-items:center; }
+    button { color:#fff; background:#7457dc; border:0; border-radius:10px; padding:10px 15px; font-weight:650; cursor:pointer; touch-action:manipulation; }
+    button:disabled { opacity:.58; cursor:wait; }
+    .quiet { color:#c8d2ed; background:#1a2544; border:1px solid #334267; }
+    #feed { flex:1; min-height:0; overflow:auto; overscroll-behavior:contain; padding:16px clamp(8px,3vw,26px); border:1px solid #27345a; border-radius:18px; background:#10182de8; box-shadow:0 16px 48px #02051055; }
+    .welcome { margin:8vh auto; max-width:570px; text-align:center; color:#aeb9d7; line-height:1.6; }
+    .welcome h2 { color:#e9e3ff; font-size:22px; }
+    .message { display:flex; gap:11px; margin:0 auto 20px; max-width:800px; align-items:flex-start; }
+    .avatar { flex:0 0 32px; width:32px; height:32px; display:grid; place-items:center; border-radius:11px; background:#263257; color:#cfc4ff; font-size:15px; }
+    .message.user .avatar { background:#51409a; color:white; }
+    .content { min-width:0; flex:1; padding-top:4px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; }
+    .message.assistant .content { color:#e0e7fb; }
+    .message.user .content { color:#d8d0ff; }
+    .composer-wrap { padding-top:12px; }
+    .composer { display:flex; align-items:flex-end; gap:8px; padding:8px; border:1px solid #344267; border-radius:15px; background:#141e37; }
+    textarea { flex:1; min-width:0; resize:none; max-height:180px; min-height:44px; padding:10px; color:#f1f4ff; background:transparent; border:0; outline:none; font-size:16px; line-height:1.4; }
+    .foot { display:flex; justify-content:space-between; color:#8492b6; font-size:12px; padding:7px 4px 0; }
+    .error { color:#ff9cad; }
+    #gate { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:18px; background:#080c18eF; z-index:2; }
+    .gate-card { width:min(420px,100%); padding:24px; border:1px solid #35436a; border-radius:18px; background:#111a32; box-shadow:0 24px 80px #0009; }
+    .gate-card h2 { margin:0 0 8px; color:#f0eaff; }
+    .gate-card p { color:#aeb9d7; line-height:1.5; }
+    .gate-card input { width:100%; padding:12px; color:white; background:#0b1225; border:1px solid #344267; border-radius:9px; font-size:16px; }
+    .gate-card button { width:100%; margin-top:12px; }
+    #gateError { min-height:20px; color:#ff9cad; font-size:13px; }
+    @media(max-width:560px) { .layout { padding-left:10px; padding-right:10px; } header { padding:7px 2px 11px; } .sub { font-size:12px; } #feed { border-radius:14px; padding:13px 9px; } .message { gap:8px; margin-bottom:17px; } .avatar { flex-basis:29px; width:29px; height:29px; } .foot { font-size:11px; } .quiet { padding:9px 10px; } }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <header>
+      <div><h1>✦ Mój Asystent AI</h1><div class="sub">Rozmowa, pomysły i pomoc na co dzień</div></div>
+      <div class="header-actions"><button class="quiet" id="clear" title="Wyczyść rozmowę">Nowy czat</button></div>
+    </header>
+    <section id="feed" aria-live="polite">
+      <div class="welcome" id="welcome"><h2>W czym mogę Ci pomóc?</h2><div>Zapytaj o naukę, napisz wiadomość, poproś o plan albo o aktualne informacje z internetu.</div></div>
+    </section>
+    <div class="composer-wrap">
+      <div class="composer"><textarea id="prompt" rows="1" maxlength="8000" placeholder="Napisz do swojego asystenta…"></textarea><button id="send">Wyślij</button></div>
+      <div class="foot"><span id="status">Gotowy do rozmowy</span><span>Enter wysyła · Shift+Enter nowy wiersz</span></div>
+    </div>
+  </main>
+  <section id="gate" aria-modal="true" role="dialog">
+    <div class="gate-card"><h2>Twój asystent</h2><p>Wpisz prywatny kod dostępu ustawiony przez właściciela aplikacji.</p><input id="access" type="password" autocomplete="current-password" placeholder="Kod dostępu"><button id="unlock">Otwórz asystenta</button><div id="gateError"></div></div>
+  </section>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const feed=$('feed'), prompt=$('prompt');
+  let accessCode='', history=[];
+  try { history=JSON.parse(localStorage.getItem('assistantHistory')||'[]'); } catch { history=[]; }
+  function renderMessage(role,text) {
+    $('welcome')?.remove();
+    const row=document.createElement('article'); row.className=`message ${role}`;
+    const avatar=document.createElement('div'); avatar.className='avatar'; avatar.textContent=role==='user'?'Ty':'✦';
+    const content=document.createElement('div'); content.className='content'; content.textContent=text;
+    row.append(avatar,content); feed.append(row); feed.scrollTop=feed.scrollHeight;
+  }
+  function saveHistory() { localStorage.setItem('assistantHistory',JSON.stringify(history.slice(-24))); }
+  history.forEach(m=>renderMessage(m.role,m.content));
+  $('unlock').onclick=()=> { accessCode=$('access').value; if (!accessCode) { $('gateError').textContent='Wpisz kod dostępu.'; return; } $('gate').style.display='none'; prompt.focus(); };
+  $('access').addEventListener('keydown',e=>{if(e.key==='Enter')$('unlock').click();});
+  async function send() {
+    const text=prompt.value.trim(); if(!text)return;
+    prompt.value=''; prompt.style.height='auto';
+    history.push({role:'user',content:text}); renderMessage('user',text); saveHistory();
+    $('send').disabled=true; $('status').textContent='Asystent pisze…'; $('status').className='';
+    const pending=document.createElement('article'); pending.className='message assistant'; pending.innerHTML='<div class="avatar">✦</div><div class="content">Chwileczkę…</div>'; feed.append(pending); feed.scrollTop=feed.scrollHeight;
+    try {
+      const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json','X-App-Code':accessCode},body:JSON.stringify({messages:history.slice(-24)})});
+      const data=await r.json(); if(!r.ok)throw Error(data.detail||'Coś poszło nie tak.');
+      pending.remove(); history.push({role:'assistant',content:data.answer}); renderMessage('assistant',data.answer); saveHistory(); $('status').textContent='Gotowy do rozmowy';
+    } catch(e) { pending.remove(); $('status').textContent=e.message; $('status').className='error'; }
+    finally { $('send').disabled=false; prompt.focus(); }
+  }
+  $('send').onclick=send;
+  prompt.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
+  prompt.addEventListener('input',()=>{prompt.style.height='auto';prompt.style.height=Math.min(prompt.scrollHeight,180)+'px';});
+  $('clear').onclick=()=>{history=[];saveHistory();feed.innerHTML='<div class="welcome" id="welcome"><h2>W czym mogę Ci pomóc?</h2><div>Zapytaj o naukę, napisz wiadomość, poproś o plan albo o aktualne informacje z internetu.</div></div>';prompt.focus();};
+})();
+</script>
+</body>
+</html>
